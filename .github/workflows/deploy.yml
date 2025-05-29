@@ -1,0 +1,40 @@
+name: Deploy to Ubuntu Server
+
+on:
+  push:
+    branches:
+      - main  # of 'master', afhankelijk van jouw branchnaam
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install SSH key
+      uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Copy files to server
+      run: |
+        ssh -o StrictHostKeyChecking=no rahel_anwari@34.27.191.79 'rm -rf ~/Arivana-WebApp && mkdir ~/Arivana-WebApp'
+        scp -r ./ rahel_anwari@34.27.191.79:~/Arivana-WebApp
+
+    - name: Restart frontend docker container
+      run: |
+        ssh -o StrictHostKeyChecking=no rahel_anwari@34.27.191.79 << 'EOF'
+          cd ~/Arivana-WebApp
+          docker build -t arivana-frontend .
+          docker stop frontend-container || true
+          docker rm frontend-container || true
+          docker run -d \
+            --name frontend-container \
+            --network nginx-network \
+            -e VIRTUAL_HOST=arivana.nl \
+            -e LETSENCRYPT_HOST=arivana.nl \
+            -e LETSENCRYPT_EMAIL=rnation.dg@gmail.com \
+            arivana-frontend
+        EOF
